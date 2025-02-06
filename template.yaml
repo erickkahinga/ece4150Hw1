@@ -1,0 +1,1794 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Metadata:
+    Generator: "former2"
+Description: "Photo Gallery with Lambda functions"
+Parameters:
+  PhotoBucketName:
+    Type: "String"
+    Description: "This is the globally-unique name of your S3 bucket for storing photos. It can be anything, but we recommend a name like photobucket-yourlastname-classcode-year." 
+  StaticWebsiteBucketName:
+    Type: "String"
+    Description: "This is the globally-unique name of your S3 bucket for storing static website files (principally JavaScript and HTML). It can be anything, but we recommend a name like staticwebsite-yourlastname-classcode-year." 
+Resources:
+    LambdaPermission:
+        Type: "AWS::Lambda::Permission"
+        Properties:
+            Action: "lambda:InvokeFunction"
+            FunctionName: !GetAtt LambdaFunction2.Arn
+            Principal: "apigateway.amazonaws.com"
+            SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayRestApi}/*/POST/photos"
+
+    LambdaPermission2:
+        Type: "AWS::Lambda::Permission"
+        Properties:
+            Action: "lambda:InvokeFunction"
+            FunctionName: !GetAtt LambdaFunction2.Arn
+            Principal: "apigateway.amazonaws.com"
+            SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayRestApi}/*/GET/photos"
+
+    LambdaPermission3:
+        Type: "AWS::Lambda::Permission"
+        Properties:
+            Action: "lambda:InvokeFunction"
+            FunctionName: !GetAtt LambdaFunction2.Arn
+            Principal: "apigateway.amazonaws.com"
+            SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayRestApi}/*/GET/photos/*"
+
+    LambdaPermission4:
+        Type: "AWS::Lambda::Permission"
+        Properties:
+            Action: "lambda:InvokeFunction"
+            FunctionName: !GetAtt LambdaFunction3.Arn
+            Principal: "apigateway.amazonaws.com"
+            SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayRestApi}/*/POST/photos"
+
+    LambdaPermission6:
+        Type: "AWS::Lambda::Permission"
+        Properties:
+            Action: "lambda:InvokeFunction"
+            FunctionName: !GetAtt LambdaFunction4.Arn
+            Principal: "apigateway.amazonaws.com"
+            SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayRestApi}/*/POST/login"
+
+    LambdaPermission7:
+        Type: "AWS::Lambda::Permission"
+        Properties:
+            Action: "lambda:InvokeFunction"
+            FunctionName: !GetAtt LambdaFunction.Arn
+            Principal: "apigateway.amazonaws.com"
+            SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayRestApi}/*/GET/photos"
+
+    LambdaPermission8:
+        Type: "AWS::Lambda::Permission"
+        Properties:
+            Action: "lambda:InvokeFunction"
+            FunctionName: !GetAtt LambdaFunction5.Arn
+            Principal: "apigateway.amazonaws.com"
+            SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayRestApi}/*/POST/search"
+
+    LambdaPermission9:
+        Type: "AWS::Lambda::Permission"
+        Properties:
+            Action: "lambda:InvokeFunction"
+            FunctionName: !GetAtt LambdaFunction6.Arn
+            Principal: "apigateway.amazonaws.com"
+            SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayRestApi}/*/POST/confirmemail"
+
+    LambdaPermission12:
+        Type: "AWS::Lambda::Permission"
+        Properties:
+            Action: "lambda:InvokeFunction"
+            FunctionName: !GetAtt LambdaFunction7.Arn
+            Principal: "apigateway.amazonaws.com"
+            SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayRestApi}/*/POST/signup"
+
+    LambdaFunction:
+        Type: "AWS::Lambda::Function"
+        Properties:
+            Description: ""
+            FunctionName: !Sub "photogallery_getphotos"
+            Handler: "index.lambda_handler"
+            Architectures: 
+              - "x86_64"
+            Code: 
+                ZipFile: !Sub |
+                    import json
+                    import boto3  
+
+                    REGION="${AWS::Region}"
+                    dynamodb = boto3.resource('dynamodb', region_name=REGION)
+                    table = dynamodb.Table('${DynamoDBTable}')
+
+                    def lambda_handler(event, context):
+                        response = table.scan()
+                        items = response['Items']
+
+                        return {
+                            "statusCode": 200,
+                            "body": items
+                        }
+            MemorySize: 128
+            Role: !GetAtt IAMRole2.Arn
+            Runtime: "python3.10"
+            Timeout: 3
+            TracingConfig: 
+                Mode: "PassThrough"
+            EphemeralStorage: 
+                Size: 512
+
+    LambdaFunction2:
+        Type: "AWS::Lambda::Function"
+        Properties:
+            Description: ""
+            FunctionName: "photogallery_getphoto"
+            Handler: "index.lambda_handler"
+            Architectures: 
+              - "x86_64"
+            Code: 
+                ZipFile: !Sub |
+                    import json
+                    import boto3  
+                    from boto3.dynamodb.conditions import Key, Attr
+
+                    REGION="${AWS::Region}"
+                    dynamodb = boto3.resource('dynamodb',region_name=REGION)
+                    table = dynamodb.Table('${DynamoDBTable}')
+
+                    def lambda_handler(event, context):
+                        photoID=event['params']['path']['id']
+
+                        tableItems = table.scan(
+                            FilterExpression=Attr('PhotoID').eq(str(photoID))
+                        )
+
+                        items = tableItems['Items']
+
+                        response = {
+                            "statusCode": 200,
+                            "body": items,
+                        }
+
+                        return response
+            MemorySize: 128
+            Role: !GetAtt IAMRole2.Arn
+            Runtime: "python3.10"
+            Timeout: 3
+            TracingConfig: 
+                Mode: "PassThrough"
+            EphemeralStorage: 
+                Size: 512
+
+    LambdaFunction3:
+        Type: "AWS::Lambda::Function"
+        Properties:
+            Description: ""
+            FunctionName: "photogallery_addphoto"
+            Handler: "index.lambda_handler"
+            Architectures: 
+              - "x86_64"
+            Code: 
+                ZipFile: !Sub |
+                    import json
+                    import boto3  
+                    import time
+                    import datetime
+
+                    REGION="${AWS::Region}"
+                    dynamodb = boto3.resource('dynamodb',region_name=REGION)
+                    table = dynamodb.Table('${DynamoDBTable}')
+
+                    def lambda_handler(event, context):
+                        username=event['body-json']['username']
+                        title=event['body-json']['title']
+                        description=event['body-json']['description']
+                        tags=event['body-json']['tags']
+                        uploadedFileURL=event['body-json']['uploadedFileURL']
+                        ts=time.time()
+                        timestamp=int(ts*1000)
+                        photoID=str(timestamp)
+                        
+                        table.put_item(
+                        Item={                        
+                                "PhotoID": photoID,
+                                "Username": username,
+                                "CreationTime": timestamp,
+                                "Title": title,
+                                "Description": description,
+                                "Tags": tags,
+                                "URL": uploadedFileURL
+                                #"ExifData": ExifData
+                            }
+                        )
+                                    
+                        return {
+                            "statusCode": 200,
+                            "body": json.dumps(photoID)
+                        }
+            MemorySize: 128
+            Role: !GetAtt IAMRole2.Arn
+            Runtime: "python3.10"
+            Timeout: 3
+            TracingConfig: 
+                Mode: "PassThrough"
+            EphemeralStorage: 
+                Size: 512
+
+    LambdaFunction4:
+        Type: "AWS::Lambda::Function"
+        Properties:
+            Description: ""
+            FunctionName: "photogallery_login"
+            Handler: "index.lambda_handler"
+            Architectures: 
+              - "x86_64"
+            Code: 
+                ZipFile: !Sub |
+                    import json
+                    import boto3   
+                    from botocore.exceptions import ClientError
+
+                    REGION="${AWS::Region}"
+                    USER_POOL_ID="${CognitoUserPool}"
+                    CLIENT_ID="${CognitoUserPoolClient}"
+
+                    cognitoclient = boto3.client('cognito-idp', region_name=REGION)
+                                                
+                    def lambda_handler(event, context):
+                        username=event['body-json']['username']
+                        password=event['body-json']['password']
+                        result=False
+                        message=""
+                        response={}
+                        returndata={} 
+                        userdata={}
+                        
+                        try:
+                            response = cognitoclient.admin_initiate_auth(
+                                UserPoolId=USER_POOL_ID,
+                                ClientId=CLIENT_ID,
+                                AuthFlow='ADMIN_USER_PASSWORD_AUTH',
+                                AuthParameters={
+                                    'USERNAME': username,
+                                    'PASSWORD': password
+                                }
+                            )
+                        
+                        except ClientError as e:
+                            message="Error in logging in"
+                            if e.response['Error']['Code'] == 'UserNotFoundException':
+                                result=False
+                                message=="Can't Find user by Email"
+                            elif e.response['Error']['Code'] == 'NotAuthorizedException':
+                                result=False
+                                message="Incorrect username or password"
+                            elif e.response['Error']['Code'] == 'UserNotConfirmedException':
+                                result=False
+                                message="User is not confirmed"
+                            else:
+                                result=False
+                                message=e.response['Error']['Code']
+
+                        if 'ResponseMetadata' in response:
+                            if response['ResponseMetadata']['HTTPStatusCode']==200:        
+                                result=True
+                                message="Login successful"
+                                response = cognitoclient.admin_get_user(
+                                    UserPoolId=USER_POOL_ID,
+                                    Username=username
+                                )
+                                for item in response['UserAttributes']:
+                                    if item['Name']=='name':
+                                        userdata['name']=item['Value']
+                                    elif item['Name']=='email':
+                                        userdata['email']=item['Value']
+                                    elif item['Name']=='email_verified':
+                                        userdata['email_verified']=item['Value']
+                            else:
+                                return False
+                                message="Something went wrong"
+                                
+                        userdata['username']=username
+                        returndata['result']=result
+                        returndata['message']=message
+                        returndata['userdata']=userdata
+                        
+                        return {
+                            "statusCode": 200,
+                            "body": json.dumps(returndata)
+                        }
+            MemorySize: 128
+            Role: !GetAtt IAMRole2.Arn
+            Runtime: "python3.10"
+            Timeout: 3
+            TracingConfig: 
+                Mode: "PassThrough"
+            EphemeralStorage: 
+                Size: 512
+
+    LambdaFunction5:
+        Type: "AWS::Lambda::Function"
+        Properties:
+            Description: ""
+            FunctionName: "photogallery_search"
+            Handler: "index.lambda_handler"
+            Architectures: 
+              - "x86_64"
+            Code: 
+                ZipFile: !Sub |
+                    import json
+                    import boto3  
+                    import time
+                    from boto3.dynamodb.conditions import Key, Attr
+
+                    REGION="${AWS::Region}"
+                    dynamodb = boto3.resource('dynamodb',region_name=REGION)
+                    table = dynamodb.Table('${DynamoDBTable}')
+
+                    def lambda_handler(event, context):
+                        query = event['body-json']['query'] 
+                            
+                        response = table.scan(
+                                FilterExpression=Attr('Title').contains(str(query)) | Attr('Description').contains(str(query)) | Attr('Tags').contains(str(query))
+                            )
+
+                        items = response['Items']
+                                    
+                        return {
+                            "statusCode": 200,
+                            "body": items
+                        }
+            MemorySize: 128
+            Role: !GetAtt IAMRole2.Arn
+            Runtime: "python3.10"
+            Timeout: 3
+            TracingConfig: 
+                Mode: "PassThrough"
+            EphemeralStorage: 
+                Size: 512
+
+    LambdaFunction6:
+        Type: "AWS::Lambda::Function"
+        Properties:
+            Description: ""
+            FunctionName: "photogallery_confirmemail"
+            Handler: "index.lambda_handler"
+            Architectures: 
+              - "x86_64"
+            Code: 
+                ZipFile: !Sub |
+                    import json
+                    import boto3   
+                    from botocore.exceptions import ClientError
+
+                    REGION="${AWS::Region}"
+                    USER_POOL_ID="${CognitoUserPool}"
+                    CLIENT_ID="${CognitoUserPoolClient}"
+
+                    cognitoclient = boto3.client('cognito-idp', region_name=REGION)
+                                                
+                    def lambda_handler(event, context):
+                        username=event['body-json']['username']
+                        code=event['body-json']['code']
+                        result=False
+                        message=""
+                        response={}
+                        returndata={} 
+                        
+                        try:
+                            response = cognitoclient.confirm_sign_up(
+                                    ClientId=CLIENT_ID,
+                                    Username=username,
+                                    ConfirmationCode=code
+                                )
+                            result=True
+                            message="User confirmed"
+                        except ClientError as e:
+                            message="Error in confirming email"
+                            if e.response['Error']['Code'] == 'UserNotFoundException':
+                                result=False
+                                message="Can't Find user by Email"
+                            elif e.response['Error']['Code'] == 'CodeMismatchException':
+                                result=False
+                                message="User Code Mismatch"
+                            elif e.response['Error']['Code'] == 'ParamValidationError':
+                                result=False
+                                message="Param Validation Error"
+                            elif e.response['Error']['Code'] == 'ExpiredCodeException':
+                                result=False
+                                message="Expired Code"
+                            elif e.response['Error']['Code'] == 'NotAuthorizedException':
+                                result=False
+                                message="User already confirmed"
+                            else:
+                                result=False
+                                message=e.response['Error']['Code']
+                        
+                        returndata['result']=result
+                        returndata['message']=message
+                        
+                        return {
+                            "statusCode": 200,
+                            "body": json.dumps(returndata)
+                        }
+            MemorySize: 128
+            Role: !GetAtt IAMRole2.Arn
+            Runtime: "python3.10"
+            Timeout: 3
+            TracingConfig: 
+                Mode: "PassThrough"
+            EphemeralStorage: 
+                Size: 512
+
+    LambdaFunction7:
+        Type: "AWS::Lambda::Function"
+        Properties:
+            Description: ""
+            FunctionName: "photogallery_signup"
+            Handler: "index.lambda_handler"
+            Architectures: 
+              - "x86_64"
+            Code: 
+                ZipFile: !Sub |
+                    import json
+                    import boto3   
+                    from botocore.exceptions import ClientError
+
+                    REGION="${AWS::Region}"
+                    USER_POOL_ID="${CognitoUserPool}"
+                    CLIENT_ID="${CognitoUserPoolClient}"
+
+                    cognitoclient = boto3.client('cognito-idp', region_name=REGION)
+                                                
+                    def lambda_handler(event, context):
+                        username=event['body-json']['username']
+                        password=event['body-json']['password']
+                        name=event['body-json']['name']
+                        email=event['body-json']['email']
+                        result=False
+                        message=""
+                        response={}
+                        returndata={} 
+                        userdata={}
+                        
+                        try:
+                            response = cognitoclient.sign_up(
+                                ClientId=CLIENT_ID,
+                                Username=username,
+                                Password=password,
+                                UserAttributes=[
+                                    {
+                                        'Name': 'name',
+                                        'Value': name
+                                    },
+                                    {
+                                        'Name': 'email',
+                                        'Value': email
+                                    }
+                                ]
+                            )
+                            result=True
+                            message="Signup successful"
+                        
+                        except ClientError as e:
+                            if e.response['Error']['Code'] == 'UsernameExistsException':
+                                result=False
+                                message="User already exists"
+                            elif e.response['Error']['Code'] == 'ParamValidationError':
+                                result=False
+                                message="Param Validation Error"
+                            elif e.response['Error']['Code'] == 'InvalidPasswordException':
+                                result=False
+                                message=e.response['Error']['Message']
+                            else:
+                                result=False
+                                message=e.response['Error']['Code']
+                        
+                        userdata['username']=username
+                        userdata['name']=name
+                        userdata['email']=email
+                        returndata['result']=result
+                        returndata['message']=message
+                        returndata['userdata']=userdata
+                        
+                        return {
+                            "statusCode": 200,
+                            "body": json.dumps(returndata)
+                        }
+            MemorySize: 128
+            Role: !GetAtt IAMRole2.Arn
+            Runtime: "python3.10"
+            Timeout: 3
+            TracingConfig: 
+                Mode: "PassThrough"
+            EphemeralStorage: 
+                Size: 512
+
+    ApiGatewayRestApi:
+        Type: "AWS::ApiGateway::RestApi"
+        Properties:
+            Name: !Sub "${DynamoDBTable}API"
+            Description: "REST API for Photo Gallery App"
+            ApiKeySourceType: "HEADER"
+            BinaryMediaTypes: 
+              - "image/jpg"
+              - "image/jpeg"
+              - "image/png"
+            EndpointConfiguration: 
+                Types: 
+                  - "EDGE"
+
+    # ApiGatewayStage:
+    #     Type: "AWS::ApiGateway::Stage"
+    #     Properties:
+    #         StageName: "dev"
+    #         DeploymentId: "sfasfd"
+    #         RestApiId: !Ref ApiGatewayRestApi
+    #         CacheClusterEnabled: false
+    #         CacheClusterSize: "0.5"
+    #         TracingEnabled: false
+
+    ApiGatewayDeployment:
+        Type: "AWS::ApiGateway::Deployment"
+        DependsOn:
+            - "ApiGatewayMethod"
+            - "ApiGatewayMethod2"
+            - "ApiGatewayMethod3"
+            - "ApiGatewayMethod4"
+            - "ApiGatewayMethod5"
+            - "ApiGatewayMethod6"
+            - "ApiGatewayMethod7"
+            - "ApiGatewayMethod8"
+            - "ApiGatewayMethod9"
+            - "ApiGatewayMethod10"
+            - "ApiGatewayMethod11"
+            - "ApiGatewayMethod12"
+            - "ApiGatewayMethod13"
+            - "ApiGatewayMethod14"
+            - "ApiGatewayMethod15"
+            - "ApiGatewayMethod16"
+        Properties:
+            RestApiId: !Ref ApiGatewayRestApi
+
+    ApiGatewayResource:
+        Type: "AWS::ApiGateway::Resource"
+        Properties:
+            RestApiId: !Ref ApiGatewayRestApi
+            PathPart: "login"
+            ParentId: !GetAtt ApiGatewayRestApi.RootResourceId
+
+    ApiGatewayResource2:
+        Type: "AWS::ApiGateway::Resource"
+        Properties:
+            RestApiId: !Ref ApiGatewayRestApi
+            PathPart: "{item}"
+            ParentId: !Ref ApiGatewayResource7
+
+    ApiGatewayResource3:
+        Type: "AWS::ApiGateway::Resource"
+        Properties:
+            RestApiId: !Ref ApiGatewayRestApi
+            PathPart: "{id}"
+            ParentId: !Ref ApiGatewayResource5
+
+    ApiGatewayResource4:
+        Type: "AWS::ApiGateway::Resource"
+        Properties:
+            RestApiId: !Ref ApiGatewayRestApi
+            PathPart: "signup"
+            ParentId: !GetAtt ApiGatewayRestApi.RootResourceId
+
+    ApiGatewayResource5:
+        Type: "AWS::ApiGateway::Resource"
+        Properties:
+            RestApiId: !Ref ApiGatewayRestApi
+            PathPart: "photos"
+            ParentId: !GetAtt ApiGatewayRestApi.RootResourceId
+
+    ApiGatewayResource6:
+        Type: "AWS::ApiGateway::Resource"
+        Properties:
+            RestApiId: !Ref ApiGatewayRestApi
+            PathPart: "confirmemail"
+            ParentId: !GetAtt ApiGatewayRestApi.RootResourceId
+
+    ApiGatewayResource7:
+        Type: "AWS::ApiGateway::Resource"
+        Properties:
+            RestApiId: !Ref ApiGatewayRestApi
+            PathPart: "uploadphoto"
+            ParentId: !GetAtt ApiGatewayRestApi.RootResourceId
+
+    ApiGatewayResource8:
+        Type: "AWS::ApiGateway::Resource"
+        Properties:
+            RestApiId: !Ref ApiGatewayRestApi
+            PathPart: "search"
+            ParentId: !GetAtt ApiGatewayRestApi.RootResourceId
+
+    ApiGatewayMethod:
+        Type: "AWS::ApiGateway::Method"
+        Properties:
+            RestApiId: !Ref ApiGatewayRestApi
+            ResourceId: !Ref ApiGatewayResource2
+            HttpMethod: "PUT"
+            AuthorizationType: "NONE"
+            ApiKeyRequired: false
+            RequestParameters: 
+                "method.request.path.item": true
+            RequestModels: {}
+            MethodResponses: 
+              - 
+                ResponseModels: 
+                    "application/json": "Empty"
+                ResponseParameters: 
+                    "method.response.header.Access-Control-Allow-Origin": false
+                StatusCode: "200"
+            Integration: 
+                CacheNamespace: !Ref ApiGatewayResource2
+                Credentials: !GetAtt IAMRole.Arn
+                IntegrationHttpMethod: "PUT"
+                IntegrationResponses: 
+                  - 
+                    ResponseParameters: 
+                        "method.response.header.Access-Control-Allow-Origin": "'*'"
+                    ResponseTemplates: {}
+                    StatusCode: "200"
+                PassthroughBehavior: "WHEN_NO_MATCH"
+                RequestParameters: 
+                    "integration.request.path.object": "method.request.path.item"
+                TimeoutInMillis: 29000
+                Type: "AWS"
+                Uri: !Sub "arn:aws:apigateway:${AWS::Region}:s3:path/${S3Bucket}/photos/{object}"
+
+    ApiGatewayMethod2:
+        Type: "AWS::ApiGateway::Method"
+        Properties:
+            RestApiId: !Ref ApiGatewayRestApi
+            ResourceId: !Ref ApiGatewayResource
+            HttpMethod: "OPTIONS"
+            AuthorizationType: "NONE"
+            ApiKeyRequired: false
+            MethodResponses: 
+              - 
+                ResponseModels: 
+                    "application/json": "Empty"
+                ResponseParameters: 
+                    "method.response.header.Access-Control-Allow-Headers": true
+                    "method.response.header.Access-Control-Allow-Methods": true
+                    "method.response.header.Access-Control-Allow-Origin": true
+                StatusCode: "200"
+            Integration: 
+                CacheNamespace: !Ref ApiGatewayResource
+                IntegrationResponses: 
+                  - 
+                    ResponseParameters: 
+                        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+                        "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,POST'"
+                        "method.response.header.Access-Control-Allow-Origin": "'*'"
+                    StatusCode: "200"
+                PassthroughBehavior: "WHEN_NO_TEMPLATES"
+                RequestTemplates: 
+                    "application/json": "{\"statusCode\": 200}"
+                TimeoutInMillis: 29000
+                Type: "MOCK"
+
+    ApiGatewayMethod3:
+        Type: "AWS::ApiGateway::Method"
+        Properties:
+            RestApiId: !Ref ApiGatewayRestApi
+            ResourceId: !Ref ApiGatewayResource
+            HttpMethod: "POST"
+            AuthorizationType: "NONE"
+            ApiKeyRequired: false
+            MethodResponses: 
+              - 
+                ResponseModels: 
+                    "application/json": "Empty"
+                ResponseParameters: 
+                    "method.response.header.Access-Control-Allow-Headers": true
+                    "method.response.header.Access-Control-Allow-Methods": true
+                    "method.response.header.Access-Control-Allow-Origin": true
+                StatusCode: "200"
+            Integration: 
+                CacheNamespace: !Ref ApiGatewayResource
+                ContentHandling: "CONVERT_TO_TEXT"
+                IntegrationHttpMethod: "POST"
+                IntegrationResponses: 
+                  - 
+                    ResponseParameters: 
+                        "method.response.header.Access-Control-Allow-Origin": "'*'"
+                    ResponseTemplates: {}
+                    StatusCode: "200"
+                PassthroughBehavior: "WHEN_NO_TEMPLATES"
+                RequestTemplates: 
+                    "application/json": !Sub |
+                        #set($allParams = $input.params())
+                        {
+                        "body-json" : $input.json('$'),
+                        "params" : {
+                        #foreach($type in $allParams.keySet())
+                            #set($params = $allParams.get($type))
+                        "$type" : {
+                            #foreach($paramName in $params.keySet())
+                            "$paramName" : "$util.escapeJavaScript($params.get($paramName))"
+                                #if($foreach.hasNext),#end
+                            #end
+                        }
+                            #if($foreach.hasNext),#end
+                        #end
+                        },
+                        "stage-variables" : {
+                        #foreach($key in $stageVariables.keySet())
+                        "$key" : "$util.escapeJavaScript($stageVariables.get($key))"
+                            #if($foreach.hasNext),#end
+                        #end
+                        },
+                        "context" : {
+                            "account-id" : "$context.identity.accountId",
+                            "api-id" : "$context.apiId",
+                            "api-key" : "$context.identity.apiKey",
+                            "authorizer-principal-id" : "$context.authorizer.principalId",
+                            "caller" : "$context.identity.caller",
+                            "cognito-authentication-provider" : "$context.identity.cognitoAuthenticationProvider",
+                            "cognito-authentication-type" : "$context.identity.cognitoAuthenticationType",
+                            "cognito-identity-id" : "$context.identity.cognitoIdentityId",
+                            "cognito-identity-pool-id" : "$context.identity.cognitoIdentityPoolId",
+                            "http-method" : "$context.httpMethod",
+                            "stage" : "$context.stage",
+                            "source-ip" : "$context.identity.sourceIp",
+                            "user" : "$context.identity.user",
+                            "user-agent" : "$context.identity.userAgent",
+                            "user-arn" : "$context.identity.userArn",
+                            "request-id" : "$context.requestId",
+                            "resource-id" : "$context.resourceId",
+                            "resource-path" : "$context.resourcePath"
+                            }
+                        }
+                TimeoutInMillis: 29000
+                Type: "AWS"
+                Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${LambdaFunction4}/invocations"
+
+    ApiGatewayMethod4:
+        Type: "AWS::ApiGateway::Method"
+        Properties:
+            RestApiId: !Ref ApiGatewayRestApi
+            ResourceId: !Ref ApiGatewayResource2
+            HttpMethod: "OPTIONS"
+            AuthorizationType: "NONE"
+            ApiKeyRequired: false
+            RequestParameters: {}
+            MethodResponses: 
+              - 
+                ResponseModels: 
+                    "application/json": "Empty"
+                ResponseParameters: 
+                    "method.response.header.Access-Control-Allow-Headers": false
+                    "method.response.header.Access-Control-Allow-Methods": false
+                    "method.response.header.Access-Control-Allow-Origin": false
+                StatusCode: "200"
+            Integration: 
+                CacheNamespace: !Ref ApiGatewayResource2
+                IntegrationResponses: 
+                  - 
+                    ResponseParameters: 
+                        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+                        "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,PUT'"
+                        "method.response.header.Access-Control-Allow-Origin": "'*'"
+                    StatusCode: "200"
+                PassthroughBehavior: "WHEN_NO_MATCH"
+                RequestTemplates: 
+                    "application/json": "{\"statusCode\": 200}"
+                TimeoutInMillis: 29000
+                Type: "MOCK"
+
+    ApiGatewayMethod5:
+        Type: "AWS::ApiGateway::Method"
+        Properties:
+            RestApiId: !Ref ApiGatewayRestApi
+            ResourceId: !Ref ApiGatewayResource6
+            HttpMethod: "POST"
+            AuthorizationType: "NONE"
+            ApiKeyRequired: false
+            RequestParameters: {}
+            RequestModels: {}
+            MethodResponses: 
+              - 
+                ResponseModels: 
+                    "application/json": "Empty"
+                ResponseParameters: 
+                    "method.response.header.Access-Control-Allow-Headers": true
+                    "method.response.header.Access-Control-Allow-Methods": true
+                    "method.response.header.Access-Control-Allow-Origin": false
+                StatusCode: "200"
+            Integration: 
+                CacheNamespace: !Ref ApiGatewayResource6
+                ContentHandling: "CONVERT_TO_TEXT"
+                IntegrationHttpMethod: "POST"
+                IntegrationResponses: 
+                  - 
+                    ResponseParameters: 
+                        "method.response.header.Access-Control-Allow-Origin": "'*'"
+                    ResponseTemplates: {}
+                    StatusCode: "200"
+                PassthroughBehavior: "WHEN_NO_TEMPLATES"
+                RequestTemplates: 
+                    "application/json": !Sub |
+                        #set($allParams = $input.params())
+                        {
+                        "body-json" : $input.json('$'),
+                        "params" : {
+                        #foreach($type in $allParams.keySet())
+                            #set($params = $allParams.get($type))
+                        "$type" : {
+                            #foreach($paramName in $params.keySet())
+                            "$paramName" : "$util.escapeJavaScript($params.get($paramName))"
+                                #if($foreach.hasNext),#end
+                            #end
+                        }
+                            #if($foreach.hasNext),#end
+                        #end
+                        },
+                        "stage-variables" : {
+                        #foreach($key in $stageVariables.keySet())
+                        "$key" : "$util.escapeJavaScript($stageVariables.get($key))"
+                            #if($foreach.hasNext),#end
+                        #end
+                        },
+                        "context" : {
+                            "account-id" : "$context.identity.accountId",
+                            "api-id" : "$context.apiId",
+                            "api-key" : "$context.identity.apiKey",
+                            "authorizer-principal-id" : "$context.authorizer.principalId",
+                            "caller" : "$context.identity.caller",
+                            "cognito-authentication-provider" : "$context.identity.cognitoAuthenticationProvider",
+                            "cognito-authentication-type" : "$context.identity.cognitoAuthenticationType",
+                            "cognito-identity-id" : "$context.identity.cognitoIdentityId",
+                            "cognito-identity-pool-id" : "$context.identity.cognitoIdentityPoolId",
+                            "http-method" : "$context.httpMethod",
+                            "stage" : "$context.stage",
+                            "source-ip" : "$context.identity.sourceIp",
+                            "user" : "$context.identity.user",
+                            "user-agent" : "$context.identity.userAgent",
+                            "user-arn" : "$context.identity.userArn",
+                            "request-id" : "$context.requestId",
+                            "resource-id" : "$context.resourceId",
+                            "resource-path" : "$context.resourcePath"
+                            }
+                        }
+                TimeoutInMillis: 29000
+                Type: "AWS"
+                Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${LambdaFunction6}/invocations"
+
+    ApiGatewayMethod6:
+        Type: "AWS::ApiGateway::Method"
+        Properties:
+            RestApiId: !Ref ApiGatewayRestApi
+            ResourceId: !Ref ApiGatewayResource4
+            HttpMethod: "POST"
+            AuthorizationType: "NONE"
+            ApiKeyRequired: false
+            RequestParameters: {}
+            RequestModels: {}
+            MethodResponses: 
+              - 
+                ResponseModels: 
+                    "application/json": "Empty"
+                ResponseParameters: 
+                    "method.response.header.Access-Control-Allow-Headers": false
+                    "method.response.header.Access-Control-Allow-Methods": false
+                    "method.response.header.Access-Control-Allow-Origin": false
+                StatusCode: "200"
+            Integration: 
+                CacheNamespace: !Ref ApiGatewayResource4
+                ContentHandling: "CONVERT_TO_TEXT"
+                IntegrationHttpMethod: "POST"
+                IntegrationResponses: 
+                  - 
+                    ResponseParameters: 
+                        "method.response.header.Access-Control-Allow-Origin": "'*'"
+                    ResponseTemplates: {}
+                    StatusCode: "200"
+                PassthroughBehavior: "WHEN_NO_TEMPLATES"
+                RequestTemplates: 
+                    "application/json": !Sub |
+                        #set($allParams = $input.params())
+                        {
+                        "body-json" : $input.json('$'),
+                        "params" : {
+                        #foreach($type in $allParams.keySet())
+                            #set($params = $allParams.get($type))
+                        "$type" : {
+                            #foreach($paramName in $params.keySet())
+                            "$paramName" : "$util.escapeJavaScript($params.get($paramName))"
+                                #if($foreach.hasNext),#end
+                            #end
+                        }
+                            #if($foreach.hasNext),#end
+                        #end
+                        },
+                        "stage-variables" : {
+                        #foreach($key in $stageVariables.keySet())
+                        "$key" : "$util.escapeJavaScript($stageVariables.get($key))"
+                            #if($foreach.hasNext),#end
+                        #end
+                        },
+                        "context" : {
+                            "account-id" : "$context.identity.accountId",
+                            "api-id" : "$context.apiId",
+                            "api-key" : "$context.identity.apiKey",
+                            "authorizer-principal-id" : "$context.authorizer.principalId",
+                            "caller" : "$context.identity.caller",
+                            "cognito-authentication-provider" : "$context.identity.cognitoAuthenticationProvider",
+                            "cognito-authentication-type" : "$context.identity.cognitoAuthenticationType",
+                            "cognito-identity-id" : "$context.identity.cognitoIdentityId",
+                            "cognito-identity-pool-id" : "$context.identity.cognitoIdentityPoolId",
+                            "http-method" : "$context.httpMethod",
+                            "stage" : "$context.stage",
+                            "source-ip" : "$context.identity.sourceIp",
+                            "user" : "$context.identity.user",
+                            "user-agent" : "$context.identity.userAgent",
+                            "user-arn" : "$context.identity.userArn",
+                            "request-id" : "$context.requestId",
+                            "resource-id" : "$context.resourceId",
+                            "resource-path" : "$context.resourcePath"
+                            }
+                        }
+                TimeoutInMillis: 29000
+                Type: "AWS"
+                Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${LambdaFunction7}/invocations"
+
+    ApiGatewayMethod7:
+        Type: "AWS::ApiGateway::Method"
+        Properties:
+            RestApiId: !Ref ApiGatewayRestApi
+            ResourceId: !Ref ApiGatewayResource8
+            HttpMethod: "POST"
+            AuthorizationType: "NONE"
+            ApiKeyRequired: false
+            MethodResponses: 
+              - 
+                ResponseModels: 
+                    "application/json": "Empty"
+                ResponseParameters: 
+                    "method.response.header.Access-Control-Allow-Headers": true
+                    "method.response.header.Access-Control-Allow-Methods": true
+                    "method.response.header.Access-Control-Allow-Origin": true
+                StatusCode: "200"
+            Integration: 
+                CacheNamespace: !Ref ApiGatewayResource8
+                ContentHandling: "CONVERT_TO_TEXT"
+                IntegrationHttpMethod: "POST"
+                IntegrationResponses: 
+                  - 
+                    ResponseParameters: 
+                        "method.response.header.Access-Control-Allow-Origin": "'*'"
+                    StatusCode: "200"
+                PassthroughBehavior: "WHEN_NO_TEMPLATES"
+                RequestTemplates: 
+                    "application/json": !Sub |
+                        #set($allParams = $input.params())
+                        {
+                        "body-json" : $input.json('$'),
+                        "params" : {
+                        #foreach($type in $allParams.keySet())
+                            #set($params = $allParams.get($type))
+                        "$type" : {
+                            #foreach($paramName in $params.keySet())
+                            "$paramName" : "$util.escapeJavaScript($params.get($paramName))"
+                                #if($foreach.hasNext),#end
+                            #end
+                        }
+                            #if($foreach.hasNext),#end
+                        #end
+                        },
+                        "stage-variables" : {
+                        #foreach($key in $stageVariables.keySet())
+                        "$key" : "$util.escapeJavaScript($stageVariables.get($key))"
+                            #if($foreach.hasNext),#end
+                        #end
+                        },
+                        "context" : {
+                            "account-id" : "$context.identity.accountId",
+                            "api-id" : "$context.apiId",
+                            "api-key" : "$context.identity.apiKey",
+                            "authorizer-principal-id" : "$context.authorizer.principalId",
+                            "caller" : "$context.identity.caller",
+                            "cognito-authentication-provider" : "$context.identity.cognitoAuthenticationProvider",
+                            "cognito-authentication-type" : "$context.identity.cognitoAuthenticationType",
+                            "cognito-identity-id" : "$context.identity.cognitoIdentityId",
+                            "cognito-identity-pool-id" : "$context.identity.cognitoIdentityPoolId",
+                            "http-method" : "$context.httpMethod",
+                            "stage" : "$context.stage",
+                            "source-ip" : "$context.identity.sourceIp",
+                            "user" : "$context.identity.user",
+                            "user-agent" : "$context.identity.userAgent",
+                            "user-arn" : "$context.identity.userArn",
+                            "request-id" : "$context.requestId",
+                            "resource-id" : "$context.resourceId",
+                            "resource-path" : "$context.resourcePath"
+                            }
+                        }
+                TimeoutInMillis: 29000
+                Type: "AWS"
+                Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${LambdaFunction5}/invocations"
+
+    ApiGatewayMethod8:
+        Type: "AWS::ApiGateway::Method"
+        Properties:
+            RestApiId: !Ref ApiGatewayRestApi
+            ResourceId: !Ref ApiGatewayResource5
+            HttpMethod: "GET"
+            AuthorizationType: "NONE"
+            ApiKeyRequired: false
+            MethodResponses: 
+              - 
+                ResponseModels: 
+                    "application/json": "Empty"
+                ResponseParameters: 
+                    "method.response.header.Access-Control-Allow-Headers": true
+                    "method.response.header.Access-Control-Allow-Methods": true
+                    "method.response.header.Access-Control-Allow-Origin": true
+                StatusCode: "200"
+            Integration: 
+                CacheNamespace: !Ref ApiGatewayResource5
+                ContentHandling: "CONVERT_TO_TEXT"
+                IntegrationHttpMethod: "POST"
+                IntegrationResponses: 
+                  - 
+                    ResponseParameters: 
+                        "method.response.header.Access-Control-Allow-Origin": "'*'"
+                    SelectionPattern: ""
+                    StatusCode: "200"
+                PassthroughBehavior: "WHEN_NO_TEMPLATES"
+                RequestTemplates: 
+                    "application/json": !Sub |
+                        #set($allParams = $input.params())
+                        {
+                        "body-json" : $input.json('$'),
+                        "params" : {
+                        #foreach($type in $allParams.keySet())
+                            #set($params = $allParams.get($type))
+                        "$type" : {
+                            #foreach($paramName in $params.keySet())
+                            "$paramName" : "$util.escapeJavaScript($params.get($paramName))"
+                                #if($foreach.hasNext),#end
+                            #end
+                        }
+                            #if($foreach.hasNext),#end
+                        #end
+                        },
+                        "stage-variables" : {
+                        #foreach($key in $stageVariables.keySet())
+                        "$key" : "$util.escapeJavaScript($stageVariables.get($key))"
+                            #if($foreach.hasNext),#end
+                        #end
+                        },
+                        "context" : {
+                            "account-id" : "$context.identity.accountId",
+                            "api-id" : "$context.apiId",
+                            "api-key" : "$context.identity.apiKey",
+                            "authorizer-principal-id" : "$context.authorizer.principalId",
+                            "caller" : "$context.identity.caller",
+                            "cognito-authentication-provider" : "$context.identity.cognitoAuthenticationProvider",
+                            "cognito-authentication-type" : "$context.identity.cognitoAuthenticationType",
+                            "cognito-identity-id" : "$context.identity.cognitoIdentityId",
+                            "cognito-identity-pool-id" : "$context.identity.cognitoIdentityPoolId",
+                            "http-method" : "$context.httpMethod",
+                            "stage" : "$context.stage",
+                            "source-ip" : "$context.identity.sourceIp",
+                            "user" : "$context.identity.user",
+                            "user-agent" : "$context.identity.userAgent",
+                            "user-arn" : "$context.identity.userArn",
+                            "request-id" : "$context.requestId",
+                            "resource-id" : "$context.resourceId",
+                            "resource-path" : "$context.resourcePath"
+                            }
+                        }
+                TimeoutInMillis: 29000
+                Type: "AWS"
+                Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${LambdaFunction}/invocations"
+
+    ApiGatewayMethod9:
+        Type: "AWS::ApiGateway::Method"
+        Properties:
+            RestApiId: !Ref ApiGatewayRestApi
+            ResourceId: !Ref ApiGatewayResource3
+            HttpMethod: "OPTIONS"
+            AuthorizationType: "NONE"
+            ApiKeyRequired: false
+            MethodResponses: 
+              - 
+                ResponseModels: 
+                    "application/json": "Empty"
+                ResponseParameters: 
+                    "method.response.header.Access-Control-Allow-Headers": true
+                    "method.response.header.Access-Control-Allow-Methods": true
+                    "method.response.header.Access-Control-Allow-Origin": true
+                StatusCode: "200"
+            Integration: 
+                CacheNamespace: !Ref ApiGatewayResource3
+                IntegrationResponses: 
+                  - 
+                    ResponseParameters: 
+                        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+                        "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,GET'"
+                        "method.response.header.Access-Control-Allow-Origin": "'*'"
+                    StatusCode: "200"
+                PassthroughBehavior: "WHEN_NO_TEMPLATES"
+                RequestTemplates: 
+                    "application/json": "{\"statusCode\": 200}"
+                TimeoutInMillis: 29000
+                Type: "MOCK"
+
+    ApiGatewayMethod10:
+        Type: "AWS::ApiGateway::Method"
+        Properties:
+            RestApiId: !Ref ApiGatewayRestApi
+            ResourceId: !Ref ApiGatewayResource5
+            HttpMethod: "POST"
+            AuthorizationType: "NONE"
+            ApiKeyRequired: false
+            MethodResponses: 
+              - 
+                ResponseModels: 
+                    "application/json": "Empty"
+                ResponseParameters: 
+                    "method.response.header.Access-Control-Allow-Headers": true
+                    "method.response.header.Access-Control-Allow-Methods": true
+                    "method.response.header.Access-Control-Allow-Origin": true
+                StatusCode: "200"
+            Integration: 
+                CacheNamespace: !Ref ApiGatewayResource5
+                ContentHandling: "CONVERT_TO_TEXT"
+                IntegrationHttpMethod: "POST"
+                IntegrationResponses: 
+                  - 
+                    ResponseParameters: 
+                        "method.response.header.Access-Control-Allow-Origin": "'*'"
+                    ResponseTemplates: {}
+                    StatusCode: "200"
+                PassthroughBehavior: "WHEN_NO_TEMPLATES"
+                RequestTemplates: 
+                    "application/json": !Sub |
+                        #set($allParams = $input.params())
+                        {
+                        "body-json" : $input.json('$'),
+                        "params" : {
+                        #foreach($type in $allParams.keySet())
+                            #set($params = $allParams.get($type))
+                        "$type" : {
+                            #foreach($paramName in $params.keySet())
+                            "$paramName" : "$util.escapeJavaScript($params.get($paramName))"
+                                #if($foreach.hasNext),#end
+                            #end
+                        }
+                            #if($foreach.hasNext),#end
+                        #end
+                        },
+                        "stage-variables" : {
+                        #foreach($key in $stageVariables.keySet())
+                        "$key" : "$util.escapeJavaScript($stageVariables.get($key))"
+                            #if($foreach.hasNext),#end
+                        #end
+                        },
+                        "context" : {
+                            "account-id" : "$context.identity.accountId",
+                            "api-id" : "$context.apiId",
+                            "api-key" : "$context.identity.apiKey",
+                            "authorizer-principal-id" : "$context.authorizer.principalId",
+                            "caller" : "$context.identity.caller",
+                            "cognito-authentication-provider" : "$context.identity.cognitoAuthenticationProvider",
+                            "cognito-authentication-type" : "$context.identity.cognitoAuthenticationType",
+                            "cognito-identity-id" : "$context.identity.cognitoIdentityId",
+                            "cognito-identity-pool-id" : "$context.identity.cognitoIdentityPoolId",
+                            "http-method" : "$context.httpMethod",
+                            "stage" : "$context.stage",
+                            "source-ip" : "$context.identity.sourceIp",
+                            "user" : "$context.identity.user",
+                            "user-agent" : "$context.identity.userAgent",
+                            "user-arn" : "$context.identity.userArn",
+                            "request-id" : "$context.requestId",
+                            "resource-id" : "$context.resourceId",
+                            "resource-path" : "$context.resourcePath"
+                            }
+                        }
+                TimeoutInMillis: 29000
+                Type: "AWS"
+                Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${LambdaFunction3}/invocations"
+
+    ApiGatewayMethod11:
+        Type: "AWS::ApiGateway::Method"
+        Properties:
+            RestApiId: !Ref ApiGatewayRestApi
+            ResourceId: !Ref ApiGatewayResource3
+            HttpMethod: "GET"
+            AuthorizationType: "NONE"
+            ApiKeyRequired: false
+            MethodResponses: 
+              - 
+                ResponseModels: 
+                    "application/json": "Empty"
+                ResponseParameters: 
+                    "method.response.header.Access-Control-Allow-Headers": true
+                    "method.response.header.Access-Control-Allow-Methods": true
+                    "method.response.header.Access-Control-Allow-Origin": true
+                StatusCode: "200"
+            Integration: 
+                CacheNamespace: !Ref ApiGatewayResource3
+                ContentHandling: "CONVERT_TO_TEXT"
+                IntegrationHttpMethod: "POST"
+                IntegrationResponses: 
+                  - 
+                    ResponseParameters: 
+                        "method.response.header.Access-Control-Allow-Origin": "'*'"
+                    StatusCode: "200"
+                PassthroughBehavior: "WHEN_NO_TEMPLATES"
+                RequestTemplates: 
+                    "application/json": !Sub |
+                        #set($allParams = $input.params())
+                        {
+                        "body-json" : $input.json('$'),
+                        "params" : {
+                        #foreach($type in $allParams.keySet())
+                            #set($params = $allParams.get($type))
+                        "$type" : {
+                            #foreach($paramName in $params.keySet())
+                            "$paramName" : "$util.escapeJavaScript($params.get($paramName))"
+                                #if($foreach.hasNext),#end
+                            #end
+                        }
+                            #if($foreach.hasNext),#end
+                        #end
+                        },
+                        "stage-variables" : {
+                        #foreach($key in $stageVariables.keySet())
+                        "$key" : "$util.escapeJavaScript($stageVariables.get($key))"
+                            #if($foreach.hasNext),#end
+                        #end
+                        },
+                        "context" : {
+                            "account-id" : "$context.identity.accountId",
+                            "api-id" : "$context.apiId",
+                            "api-key" : "$context.identity.apiKey",
+                            "authorizer-principal-id" : "$context.authorizer.principalId",
+                            "caller" : "$context.identity.caller",
+                            "cognito-authentication-provider" : "$context.identity.cognitoAuthenticationProvider",
+                            "cognito-authentication-type" : "$context.identity.cognitoAuthenticationType",
+                            "cognito-identity-id" : "$context.identity.cognitoIdentityId",
+                            "cognito-identity-pool-id" : "$context.identity.cognitoIdentityPoolId",
+                            "http-method" : "$context.httpMethod",
+                            "stage" : "$context.stage",
+                            "source-ip" : "$context.identity.sourceIp",
+                            "user" : "$context.identity.user",
+                            "user-agent" : "$context.identity.userAgent",
+                            "user-arn" : "$context.identity.userArn",
+                            "request-id" : "$context.requestId",
+                            "resource-id" : "$context.resourceId",
+                            "resource-path" : "$context.resourcePath"
+                            }
+                        }
+                TimeoutInMillis: 29000
+                Type: "AWS"
+                Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${LambdaFunction2}/invocations"
+
+    ApiGatewayMethod12:
+        Type: "AWS::ApiGateway::Method"
+        Properties:
+            RestApiId: !Ref ApiGatewayRestApi
+            ResourceId: !Ref ApiGatewayResource4
+            HttpMethod: "OPTIONS"
+            AuthorizationType: "NONE"
+            ApiKeyRequired: false
+            RequestParameters: {}
+            MethodResponses: 
+              - 
+                ResponseModels: 
+                    "application/json": "Empty"
+                ResponseParameters: 
+                    "method.response.header.Access-Control-Allow-Headers": false
+                    "method.response.header.Access-Control-Allow-Methods": false
+                    "method.response.header.Access-Control-Allow-Origin": false
+                StatusCode: "200"
+            Integration: 
+                CacheNamespace: !Ref ApiGatewayResource4
+                IntegrationResponses: 
+                  - 
+                    ResponseParameters: 
+                        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+                        "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,POST'"
+                        "method.response.header.Access-Control-Allow-Origin": "'*'"
+                    StatusCode: "200"
+                PassthroughBehavior: "WHEN_NO_MATCH"
+                RequestTemplates: 
+                    "application/json": "{\"statusCode\": 200}"
+                TimeoutInMillis: 29000
+                Type: "MOCK"
+
+    ApiGatewayMethod13:
+        Type: "AWS::ApiGateway::Method"
+        Properties:
+            RestApiId: !Ref ApiGatewayRestApi
+            ResourceId: !Ref ApiGatewayResource5
+            HttpMethod: "OPTIONS"
+            AuthorizationType: "NONE"
+            ApiKeyRequired: false
+            MethodResponses: 
+              - 
+                ResponseModels: 
+                    "application/json": "Empty"
+                ResponseParameters: 
+                    "method.response.header.Access-Control-Allow-Headers": true
+                    "method.response.header.Access-Control-Allow-Methods": true
+                    "method.response.header.Access-Control-Allow-Origin": true
+                StatusCode: "200"
+            Integration: 
+                CacheNamespace: !Ref ApiGatewayResource5
+                IntegrationResponses: 
+                  - 
+                    ResponseParameters: 
+                        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+                        "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,GET'"
+                        "method.response.header.Access-Control-Allow-Origin": "'*'"
+                    StatusCode: "200"
+                PassthroughBehavior: "WHEN_NO_TEMPLATES"
+                RequestTemplates: 
+                    "application/json": "{\"statusCode\": 200}"
+                TimeoutInMillis: 29000
+                Type: "MOCK"
+
+    ApiGatewayMethod14:
+        Type: "AWS::ApiGateway::Method"
+        Properties:
+            RestApiId: !Ref ApiGatewayRestApi
+            ResourceId: !Ref ApiGatewayResource6
+            HttpMethod: "OPTIONS"
+            AuthorizationType: "NONE"
+            ApiKeyRequired: false
+            RequestParameters: {}
+            MethodResponses: 
+              - 
+                ResponseModels: 
+                    "application/json": "Empty"
+                ResponseParameters: 
+                    "method.response.header.Access-Control-Allow-Headers": false
+                    "method.response.header.Access-Control-Allow-Methods": false
+                    "method.response.header.Access-Control-Allow-Origin": false
+                StatusCode: "200"
+            Integration: 
+                CacheNamespace: !Ref ApiGatewayResource6
+                IntegrationResponses: 
+                  - 
+                    ResponseParameters: 
+                        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+                        "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,POST'"
+                        "method.response.header.Access-Control-Allow-Origin": "'*'"
+                    StatusCode: "200"
+                PassthroughBehavior: "WHEN_NO_TEMPLATES"
+                RequestTemplates: 
+                    "application/json": "{\"statusCode\": 200}"
+                TimeoutInMillis: 29000
+                Type: "MOCK"
+
+    ApiGatewayMethod15:
+        Type: "AWS::ApiGateway::Method"
+        Properties:
+            RestApiId: !Ref ApiGatewayRestApi
+            ResourceId: !Ref ApiGatewayResource7
+            HttpMethod: "OPTIONS"
+            AuthorizationType: "NONE"
+            ApiKeyRequired: false
+            MethodResponses: 
+              - 
+                ResponseModels: 
+                    "application/json": "Empty"
+                ResponseParameters: 
+                    "method.response.header.Access-Control-Allow-Headers": true
+                    "method.response.header.Access-Control-Allow-Methods": true
+                    "method.response.header.Access-Control-Allow-Origin": true
+                StatusCode: "200"
+            Integration: 
+                CacheNamespace: !Ref ApiGatewayResource7
+                IntegrationResponses: 
+                  - 
+                    ResponseParameters: 
+                        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+                        "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,PUT'"
+                        "method.response.header.Access-Control-Allow-Origin": "'*'"
+                    StatusCode: "200"
+                PassthroughBehavior: "WHEN_NO_TEMPLATES"
+                RequestTemplates: 
+                    "application/json": "{\"statusCode\": 200}"
+                TimeoutInMillis: 29000
+                Type: "MOCK"
+
+    ApiGatewayMethod16:
+        Type: "AWS::ApiGateway::Method"
+        Properties:
+            RestApiId: !Ref ApiGatewayRestApi
+            ResourceId: !Ref ApiGatewayResource8
+            HttpMethod: "OPTIONS"
+            AuthorizationType: "NONE"
+            ApiKeyRequired: false
+            MethodResponses: 
+              - 
+                ResponseModels: 
+                    "application/json": "Empty"
+                ResponseParameters: 
+                    "method.response.header.Access-Control-Allow-Headers": true
+                    "method.response.header.Access-Control-Allow-Methods": true
+                    "method.response.header.Access-Control-Allow-Origin": true
+                StatusCode: "200"
+            Integration: 
+                CacheNamespace: !Ref ApiGatewayResource8
+                IntegrationResponses: 
+                  - 
+                    ResponseParameters: 
+                        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+                        "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,POST'"
+                        "method.response.header.Access-Control-Allow-Origin": "'*'"
+                    StatusCode: "200"
+                PassthroughBehavior: "WHEN_NO_TEMPLATES"
+                RequestTemplates: 
+                    "application/json": "{\"statusCode\": 200}"
+                TimeoutInMillis: 29000
+                Type: "MOCK"
+
+    DynamoDBTable:
+        Type: "AWS::DynamoDB::Table"
+        Properties:
+            AttributeDefinitions: 
+              - 
+                AttributeName: "CreationTime"
+                AttributeType: "N"
+              - 
+                AttributeName: "PhotoID"
+                AttributeType: "S"
+            TableName: "PhotoGallery"
+            KeySchema: 
+              - 
+                AttributeName: "PhotoID"
+                KeyType: "HASH"
+              - 
+                AttributeName: "CreationTime"
+                KeyType: "RANGE"
+            ProvisionedThroughput: 
+                ReadCapacityUnits: 5
+                WriteCapacityUnits: 5
+
+    S3Bucket:
+        Type: "AWS::S3::Bucket"
+        Properties:
+            PublicAccessBlockConfiguration:
+                BlockPublicAcls: false
+                BlockPublicPolicy: false
+                IgnorePublicAcls: false
+                RestrictPublicBuckets: false
+            BucketName: !Ref "PhotoBucketName"
+            BucketEncryption: 
+                ServerSideEncryptionConfiguration: 
+                  - 
+                    ServerSideEncryptionByDefault: 
+                        SSEAlgorithm: "AES256"
+                    BucketKeyEnabled: false
+            CorsConfiguration: 
+                CorsRules: 
+                  - 
+                    AllowedHeaders: 
+                      - "Authorization"
+                    AllowedMethods: 
+                      - "GET"
+                    AllowedOrigins: 
+                      - "*"
+            OwnershipControls: 
+                Rules: 
+                  - 
+                    ObjectOwnership: "BucketOwnerEnforced"
+
+    S3Bucket2:
+        Type: "AWS::S3::Bucket"
+        Properties:
+            PublicAccessBlockConfiguration:
+                BlockPublicAcls: false
+                BlockPublicPolicy: false
+                IgnorePublicAcls: false
+                RestrictPublicBuckets: false
+            BucketName: !Ref "StaticWebsiteBucketName"
+            BucketEncryption: 
+                ServerSideEncryptionConfiguration: 
+                  - 
+                    ServerSideEncryptionByDefault: 
+                        SSEAlgorithm: "AES256"
+                    BucketKeyEnabled: false
+            CorsConfiguration: 
+                CorsRules: 
+                  - 
+                    AllowedHeaders: 
+                      - "Authorization"
+                    AllowedMethods: 
+                      - "GET"
+                    AllowedOrigins: 
+                      - "*"
+            WebsiteConfiguration: 
+                IndexDocument: "index.html"
+            OwnershipControls: 
+                Rules: 
+                  - 
+                    ObjectOwnership: "BucketOwnerEnforced"
+
+    S3BucketPolicy:
+        Type: "AWS::S3::BucketPolicy"
+        Properties:
+            Bucket: !Ref S3Bucket
+            PolicyDocument: 
+                Version: "2012-10-17"
+                Statement: 
+                  - 
+                    Sid: "PublicReadGetObject"
+                    Effect: "Allow"
+                    Principal: "*"
+                    Action: "s3:GetObject"
+                    Resource: !Sub "arn:aws:s3:::${S3Bucket}/photos/*"
+
+    S3BucketPolicy2:
+        Type: "AWS::S3::BucketPolicy"
+        Properties:
+            Bucket: !Ref S3Bucket2
+            PolicyDocument: 
+                Version: "2012-10-17"
+                Statement: 
+                  - 
+                    Sid: "PublicReadGetObject"
+                    Effect: "Allow"
+                    Principal: "*"
+                    Action: "s3:GetObject"
+                    Resource: !Sub "arn:aws:s3:::${S3Bucket2}/*"
+    IAMRole:
+        Type: "AWS::IAM::Role"
+        Properties:
+            Path: "/"
+            RoleName: "apiS3PutGet-Role"
+            AssumeRolePolicyDocument: "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"apigateway.amazonaws.com\"},\"Action\":\"sts:AssumeRole\"}]}"
+            MaxSessionDuration: 3600
+            ManagedPolicyArns: 
+              - "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+              - "arn:aws:iam::aws:policy/AmazonS3FullAccess"
+
+    IAMRole2:
+        Type: "AWS::IAM::Role"
+        Properties:
+            Path: "/"
+            RoleName: "lambda_photogallery_role"
+            AssumeRolePolicyDocument: "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"lambda.amazonaws.com\"},\"Action\":\"sts:AssumeRole\"}]}"
+            MaxSessionDuration: 3600
+            ManagedPolicyArns: 
+              - "arn:aws:iam::aws:policy/AmazonCognitoPowerUser"
+              - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+              - "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess"
+
+    CognitoUserPool:
+        Type: "AWS::Cognito::UserPool"
+        Properties:
+            UserPoolName: !Sub "${DynamoDBTable}UserPool"
+            Policies: 
+                PasswordPolicy: 
+                    MinimumLength: 8
+                    RequireUppercase: true
+                    RequireLowercase: true
+                    RequireNumbers: true
+                    RequireSymbols: true
+                    TemporaryPasswordValidityDays: 7
+            LambdaConfig: {}
+            Schema: 
+              - 
+                Name: "profile"
+                AttributeDataType: "String"
+                DeveloperOnlyAttribute: false
+                Mutable: true
+                Required: false
+                StringAttributeConstraints: 
+                    MinLength: "0"
+                    MaxLength: "2048"
+              - 
+                Name: "address"
+                AttributeDataType: "String"
+                DeveloperOnlyAttribute: false
+                Mutable: true
+                Required: false
+                StringAttributeConstraints: 
+                    MinLength: "0"
+                    MaxLength: "2048"
+              - 
+                Name: "birthdate"
+                AttributeDataType: "String"
+                DeveloperOnlyAttribute: false
+                Mutable: true
+                Required: false
+                StringAttributeConstraints: 
+                    MinLength: "10"
+                    MaxLength: "10"
+              - 
+                Name: "gender"
+                AttributeDataType: "String"
+                DeveloperOnlyAttribute: false
+                Mutable: true
+                Required: false
+                StringAttributeConstraints: 
+                    MinLength: "0"
+                    MaxLength: "2048"
+              - 
+                Name: "preferred_username"
+                AttributeDataType: "String"
+                DeveloperOnlyAttribute: false
+                Mutable: true
+                Required: false
+                StringAttributeConstraints: 
+                    MinLength: "0"
+                    MaxLength: "2048"
+              - 
+                Name: "updated_at"
+                AttributeDataType: "Number"
+                DeveloperOnlyAttribute: false
+                Mutable: true
+                Required: false
+                NumberAttributeConstraints: 
+                    MinValue: "0"
+              - 
+                Name: "website"
+                AttributeDataType: "String"
+                DeveloperOnlyAttribute: false
+                Mutable: true
+                Required: false
+                StringAttributeConstraints: 
+                    MinLength: "0"
+                    MaxLength: "2048"
+              - 
+                Name: "picture"
+                AttributeDataType: "String"
+                DeveloperOnlyAttribute: false
+                Mutable: true
+                Required: false
+                StringAttributeConstraints: 
+                    MinLength: "0"
+                    MaxLength: "2048"
+              - 
+                Name: "identities"
+                AttributeDataType: "String"
+                DeveloperOnlyAttribute: false
+                Mutable: true
+                Required: false
+                StringAttributeConstraints: {}
+              - 
+                Name: "sub"
+                AttributeDataType: "String"
+                DeveloperOnlyAttribute: false
+                Mutable: false
+                Required: true
+                StringAttributeConstraints: 
+                    MinLength: "1"
+                    MaxLength: "2048"
+              - 
+                Name: "phone_number"
+                AttributeDataType: "String"
+                DeveloperOnlyAttribute: false
+                Mutable: true
+                Required: false
+                StringAttributeConstraints: 
+                    MinLength: "0"
+                    MaxLength: "2048"
+              - 
+                Name: "phonenumber_verified"
+                AttributeDataType: "Boolean"
+                DeveloperOnlyAttribute: false
+                Mutable: true
+                Required: false
+              - 
+                Name: "zoneinfo"
+                AttributeDataType: "String"
+                DeveloperOnlyAttribute: false
+                Mutable: true
+                Required: false
+                StringAttributeConstraints: 
+                    MinLength: "0"
+                    MaxLength: "2048"
+              - 
+                Name: "locale"
+                AttributeDataType: "String"
+                DeveloperOnlyAttribute: false
+                Mutable: true
+                Required: false
+                StringAttributeConstraints: 
+                    MinLength: "0"
+                    MaxLength: "2048"
+              - 
+                Name: "email"
+                AttributeDataType: "String"
+                DeveloperOnlyAttribute: false
+                Mutable: true
+                Required: false
+                StringAttributeConstraints: 
+                    MinLength: "0"
+                    MaxLength: "2048"
+              - 
+                Name: "email_verified"
+                AttributeDataType: "Boolean"
+                DeveloperOnlyAttribute: false
+                Mutable: true
+                Required: false
+              - 
+                Name: "given_name"
+                AttributeDataType: "String"
+                DeveloperOnlyAttribute: false
+                Mutable: true
+                Required: false
+                StringAttributeConstraints: 
+                    MinLength: "0"
+                    MaxLength: "2048"
+              - 
+                Name: "family_name"
+                AttributeDataType: "String"
+                DeveloperOnlyAttribute: false
+                Mutable: true
+                Required: false
+                StringAttributeConstraints: 
+                    MinLength: "0"
+                    MaxLength: "2048"
+              - 
+                Name: "middle_name"
+                AttributeDataType: "String"
+                DeveloperOnlyAttribute: false
+                Mutable: true
+                Required: false
+                StringAttributeConstraints: 
+                    MinLength: "0"
+                    MaxLength: "2048"
+              - 
+                Name: "name"
+                AttributeDataType: "String"
+                DeveloperOnlyAttribute: false
+                Mutable: true
+                Required: false
+                StringAttributeConstraints: 
+                    MinLength: "0"
+                    MaxLength: "2048"
+              - 
+                Name: "nickname"
+                AttributeDataType: "String"
+                DeveloperOnlyAttribute: false
+                Mutable: true
+                Required: false
+                StringAttributeConstraints: 
+                    MinLength: "0"
+                    MaxLength: "2048"
+            AutoVerifiedAttributes: 
+              - "email"
+            MfaConfiguration: "OFF"
+            EmailConfiguration: 
+                EmailSendingAccount: "COGNITO_DEFAULT"
+            AdminCreateUserConfig: 
+                AllowAdminCreateUserOnly: false
+            UserPoolTags: {}
+            AccountRecoverySetting: 
+                RecoveryMechanisms: 
+                  - 
+                    Priority: 1
+                    Name: "verified_email"
+            VerificationMessageTemplate: 
+                DefaultEmailOption: "CONFIRM_WITH_CODE"
+
+    CognitoUserPoolClient:
+        Type: "AWS::Cognito::UserPoolClient"
+        Properties:
+            UserPoolId: !Ref CognitoUserPool
+            ClientName: "MyCloudApp"
+            RefreshTokenValidity: 30
+            ExplicitAuthFlows: 
+              - "ALLOW_ADMIN_USER_PASSWORD_AUTH"
+              - "ALLOW_CUSTOM_AUTH"
+              - "ALLOW_REFRESH_TOKEN_AUTH"
+              - "ALLOW_USER_PASSWORD_AUTH"
+              - "ALLOW_USER_SRP_AUTH"
+            AllowedOAuthFlowsUserPoolClient: false
+            IdTokenValidity: 3
+            AccessTokenValidity: 3
+            TokenValidityUnits: {}
+
