@@ -1,5 +1,5 @@
-const API_URL = "https://YOUR-INVOKE-URL-HERE.execute-api.us-east-1.amazonaws.com/dev";
-const PHOTOGALLERY_S3_BUCKET_URL = "YOUR-PHOTOBUCKET-NAME-HERE";
+const API_URL = "https://a5rx9suhc3.execute-api.us-east-1.amazonaws.com/dev";
+const PHOTOGALLERY_S3_BUCKET_URL = "photobucket-kahinga-ece-4150";
 
 function clearSession() {
     sessionStorage.clear();
