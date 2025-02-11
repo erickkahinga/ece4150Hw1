@@ -82,6 +82,14 @@ Resources:
             Principal: "apigateway.amazonaws.com"
             SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayRestApi}/*/POST/signup"
 
+    LambdaPermission13:
+        Type: "AWS::Lambda::Permission"
+        Properties:
+            Action: "lambda:InvokeFunction"
+            FunctionName: !GetAtt LambdaFunction8.Arn
+            Principal: "apigateway.amazonaws.com"
+            SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayRestApi}/*/DELETE/photos/*"   
+
     LambdaFunction:
         Type: "AWS::Lambda::Function"
         Properties:
@@ -503,6 +511,100 @@ Resources:
             EphemeralStorage: 
                 Size: 512
 
+    # Lambda Function Delete Photo
+    LambdaFunction8:
+        Type: "AWS::Lambda::Function"
+        Properties: 
+            Description: ""
+            FunctionName: "photogallery_deletephoto"
+            Handler: "index.lambda_handler"
+            Architectures: 
+                - "x86_64"
+            Code:
+                ZipFile: !Sub |
+                    import json
+                    import boto3
+                    from boto3.dynamodb.conditions import Key
+
+                    REGION = "${AWS::Region}"
+                    dynamodb = boto3.resource('dynamodb', region_name=REGION)
+                    s3 = boto3.client('s3', region_name=REGION)
+                    table = dynamodb.Table('${DynamoDBTable}')
+                    PHOTO_BUCKET = "${PhotoBucketName}"
+
+                    def lambda_handler(event, context):
+                        # Ensure PhotoID is present in the request
+                        if 'pathParameters' not in event or 'id' not in event['pathParameters']:
+                            return {
+                                "statusCode": 400,
+                                "headers": {
+                                    "Access-Control-Allow-Origin": "*",
+                                    "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS",
+                                    "Access-Control-Allow-Headers": "Content-Type,Authorization"
+                                },
+                                "body": json.dumps({"message": "Missing PhotoID"})
+                            }
+                        
+                        photoID = event['pathParameters']['id']
+
+                        # Fetch the photo using query() instead of get_item()
+                        response = table.query(
+                            KeyConditionExpression=Key('PhotoID').eq(photoID)
+                        )
+
+                        if 'Items' not in response or len(response['Items']) == 0:
+                            return {
+                                "statusCode": 404,
+                                "headers": {
+                                    "Access-Control-Allow-Origin": "*",
+                                    "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS",
+                                    "Access-Control-Allow-Headers": "Content-Type,Authorization"
+                                },
+                                "body": json.dumps({"message": "Photo not found"})
+                            }
+
+                        photo = response['Items'][0]  # Get first matching item
+                        creationTime = photo['CreationTime']  # Extract CreationTime
+                        file_url = photo['URL']
+                        filename = file_url.split('/')[-1]
+
+                        # Delete from DynamoDB
+                        table.delete_item(
+                            Key={'PhotoID': photoID, 'CreationTime': creationTime}
+                        )
+
+                        # Delete from S3
+                        try:
+                            s3.delete_object(Bucket=PHOTO_BUCKET, Key=f"photos/{filename}")
+                        except Exception as e:
+                            return {
+                                "statusCode": 500,
+                                "headers": {
+                                    "Access-Control-Allow-Origin": "*",
+                                    "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS",
+                                    "Access-Control-Allow-Headers": "Content-Type,Authorization"
+                                },
+                                "body": json.dumps({"message": "Failed to delete from S3", "error": str(e)})
+                            }
+
+                        return {
+                            "statusCode": 200,
+                            "headers": {
+                                "Access-Control-Allow-Origin": "*",
+                                "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS",
+                                "Access-Control-Allow-Headers": "Content-Type,Authorization"
+                            },
+                            "body": json.dumps({"message": "Photo deleted successfully"})
+                        }
+            MemorySize: 128
+            Role: !GetAtt IAMRole2.Arn
+            Runtime: "python3.10"
+            Timeout: 3
+            TracingConfig: 
+                Mode: "PassThrough"
+            EphemeralStorage: 
+                Size: 512
+
     ApiGatewayRestApi:
         Type: "AWS::ApiGateway::RestApi"
         Properties:
@@ -546,6 +648,7 @@ Resources:
             - "ApiGatewayMethod14"
             - "ApiGatewayMethod15"
             - "ApiGatewayMethod16"
+            - "ApiGatewayMethod17"
         Properties:
             RestApiId: !Ref ApiGatewayRestApi
 
@@ -1111,7 +1214,7 @@ Resources:
                   - 
                     ResponseParameters: 
                         "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-                        "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,GET'"
+                        "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,GET,DELETE,OPTIONS'"
                         "method.response.header.Access-Control-Allow-Origin": "'*'"
                     StatusCode: "200"
                 PassthroughBehavior: "WHEN_NO_TEMPLATES"
@@ -1433,6 +1536,48 @@ Resources:
                 TimeoutInMillis: 29000
                 Type: "MOCK"
 
+    # Delete Api Gateway
+    ApiGatewayMethod17:
+        Type: "AWS::ApiGateway::Method"
+        Properties:
+            RestApiId: !Ref ApiGatewayRestApi
+            ResourceId: !Ref ApiGatewayResource3
+            HttpMethod: "DELETE"
+            AuthorizationType: "NONE"
+            ApiKeyRequired: false
+            MethodResponses: 
+              - 
+                ResponseModels: 
+                    "application/json": "Empty"
+                ResponseParameters: 
+                    "method.response.header.Access-Control-Allow-Origin": true
+                    "method.response.header.Access-Control-Allow-Methods": true
+                    "method.response.header.Access-Control-Allow-Headers": true
+                StatusCode: "200"
+            Integration: 
+                CacheNamespace: !Ref ApiGatewayResource3
+                ContentHandling: "CONVERT_TO_TEXT"
+                IntegrationHttpMethod: "POST"
+                IntegrationResponses: 
+                  - 
+                    ResponseParameters: 
+                        "method.response.header.Access-Control-Allow-Origin": "'*'"
+                        "method.response.header.Access-Control-Allow-Methods": "'GET,POST,DELETE,OPTIONS'"
+                        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,Authorization'"
+                    ResponseTemplates: {}
+                    StatusCode: "200"
+                PassthroughBehavior: "WHEN_NO_TEMPLATES"
+                RequestTemplates:
+                    "application/json": !Sub |
+                        {
+                            "pathParameters": {
+                                "id": "$input.params('id')"
+                            }
+                        }
+                TimeoutInMillis: 29000
+                Type: "AWS"
+                Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunction8.Arn}/invocations"
+
     DynamoDBTable:
         Type: "AWS::DynamoDB::Table"
         Properties:
@@ -1558,12 +1703,26 @@ Resources:
         Properties:
             Path: "/"
             RoleName: "lambda_photogallery_role"
-            AssumeRolePolicyDocument: "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"lambda.amazonaws.com\"},\"Action\":\"sts:AssumeRole\"}]}"
+            AssumeRolePolicyDocument: 
+                "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"lambda.amazonaws.com\"},\"Action\":\"sts:AssumeRole\"}]}"
             MaxSessionDuration: 3600
             ManagedPolicyArns: 
-              - "arn:aws:iam::aws:policy/AmazonCognitoPowerUser"
-              - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-              - "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess"
+            - "arn:aws:iam::aws:policy/AmazonCognitoPowerUser"
+            - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+            - "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess"
+            Policies:
+            - 
+                PolicyName: "S3DeleteAccess"
+                PolicyDocument:
+                    Version: "2012-10-17"
+                    Statement:
+                    - 
+                        Effect: "Allow"
+                        Action:
+                        - "s3:DeleteObject"
+                        Resource: 
+                        - !Sub "arn:aws:s3:::${PhotoBucketName}/photos/*"
+
 
     CognitoUserPool:
         Type: "AWS::Cognito::UserPool"

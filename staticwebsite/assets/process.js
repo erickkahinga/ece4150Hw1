@@ -354,7 +354,7 @@ function loadViewPhotoPage(){
         success: function(data) {            
             console.log(data);
             photo=data.body[0];
-            htmlstr = htmlstr + '<img class=\"img-responsive\" src=\"'+photo.URL+'\" alt=\"\"> <div style="display: block;position: relative;float: right;margin: 1em;"><button id="photo_update" data-photo="' + photo.PhotoID + '">Update</button> <button id="photo_delete" data-photo="' + photo.PhotoID + '">Delete</button></div><div class=\"blog-grid-content\"> <h2 class=\"blog-grid-title-lg\"><a class=\"blog-grid-title-link\" href=\"#\">'+photo.Title+'</a></h2> <p>By: '+photo.Username+'</p> <p>Uploaded: '+photo.CreationTime+'</p> <p>'+photo.Description+'</p></div>'
+            htmlstr = htmlstr + '<img class=\"img-responsive\" src=\"'+photo.URL+'\" alt=\"\"> <div style="display: block;position: relative;float: right;margin: 1em;"><button id="photo_update" data-photo="' + photo.PhotoID + '">Update</button> <button id="photo_delete" data-photo="' + photo.PhotoID + '">Delete</button></div><div class=\"blog-grid-content\"> <h2 class=\"blog-grid-title-lg\"><a class=\"blog-grid-title-link\" href=\"#\">'+photo.Title+'</a></h2> <p>By: '+photo.Username+'</p> <p>Uploaded: '+photo.CreationTime+'</p> <p>'+photo.Description+'</p></div>';
             $('#viewphoto-container').html(htmlstr);
             // onViewImage();
             tags=photo.Tags.split(',');
@@ -370,19 +370,84 @@ function loadViewPhotoPage(){
     });   
 }
 
-$('#portfolio-4-col-grid').on('click', '#home_delete', function(e) {
-    var $this = $(this);
-    console.log("DELETING!!")
-    console.log(`PhotoID: ${$this.data('photoid')}`);
-    console.log(`CreationTime: ${$this.data('creationtime')}`);
-})
+// Deleting function
+function deletePhotoIndexHtml(photoID, element) {
+    if (!confirm("Do you actually want to delete this?")) {
+        return;
+    }
 
-$('#viewphoto-container').on('click', '#photo_update', function() {
-    console.log("UPDATE!!!!", $(this).data('photo'))
+    $.ajax({
+        url: `${API_URL}/photos/${photoID}`,
+        type: 'DELETE',
+        crossDomain: true,
+        dataType: 'json',
+        contentType: "application/json",
+        success: function(data) {
+            console.log('DELETED', data);
+
+            $(element).closest('.cbp-item').fadeOut(300, function() {
+                $(this).remove();
+            });
+        },
+        error: function(xhr) {
+            console.log('DELETE FAILED', xhr.responseText);
+        },
+    });
+}
+
+function deletePhotoViewPhotoHtml(photoID) {
+    if (!confirm("Do you actually want to delete this?")) {
+        return;
+    }
+
+    $.ajax({
+        url: `${API_URL}/photos/${photoID}`,
+        type: 'DELETE',
+        crossDomain: true,
+        dataType: 'json',
+        contentType: "application/json",
+        success: function(data) {
+            console.log('DELETED', data);
+            window.location.href = 'index.html';
+        },
+        error: function(xhr) {
+            console.log('DELETE FAILED', xhr.responseText);
+        },
+    });
+}
+
+
+
+$('#portfolio-4-col-grid').on('click', '#home_delete', function(e) {
+    e.preventDefault();
+    var $this = $(this);
+    var photoID = $this.data('photoid');
+
+    if (photoID) {
+        console.log("DELETING!!");
+        console.log("PhotoID: ", photoID);
+        console.log(`CreationTime: ${$this.data('creationtime')}`);
+        deletePhotoIndexHtml(photoID, $this);
+    } else {
+        console.error("PhotoID missing");
+    }
 });
 
-$('#viewphoto-container').on('click', '#photo_delete', function() {
-    console.log("DELETE!!!!", $(this).data('photo'))
+$('#viewphoto-container').on('click', '#photo_update', function() {
+    console.log("UPDATE!!!!", $(this).data('photo'));
+});
+
+$('#viewphoto-container').on('click', '#photo_delete', function(e) {
+    e.preventDefault;
+    var $this = $(this);
+    var photoID = $this.data('photo');
+
+    if (photoID) {
+        console.log("DELETE!!!! PhotoID: ", photoID);
+        deletePhotoViewPhotoHtml(photoID);
+    } else {
+        console.error("PhotoID missing")
+    }
 });
 
 $(document).ready(function(){
