@@ -149,15 +149,68 @@ function uploadPhoto(){
     }); 
 }
 
+function loadSearchPage(){
+    var query = sessionStorage.getItem('query') || "";
+
+    if (!query) {
+        $("#searchquery-container").html("No search query provided.");
+        return;
+    }
+
+    var datadir = { query: query };
+
+    $.ajax({
+        url: `${API_URL}/search`,
+        type: 'POST',
+        crossDomain: true,
+        dataType: 'json',
+        contentType: "application/json",
+        success: function(data) {
+            console.log("Search results: ", data);
+
+            // Handle different response formats
+            var results = data.body || data || [];
+
+            $("#searchquery-container").html(`Showing search results for: <strong>${query}</strong>`);
+
+            var htmlstr = "";
+            $.each(results, function(index, value) { 
+                htmlstr += `
+                    <div class="cbp-item idea web-design theme-portfolio-item-v2 theme-portfolio-item-xs">
+                        <div class="cbp-caption">
+                            <div class="cbp-caption-defaultWrap theme-portfolio-active-wrap">
+                                <img src="${value.URL}" alt="">
+                                <div class="theme-icons-wrap theme-portfolio-lightbox">
+                                    <a class="cbp-lightbox" href="${value.URL}" data-title="Portfolio">
+                                        <i class="theme-icons theme-icons-white-bg theme-icons-sm radius-3 icon-focus"></i>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="theme-portfolio-title-heading">
+                            <h4 class="theme-portfolio-title">
+                                <a href="viewphoto.html?id=${value.PhotoID}">${value.Title}</a>
+                            </h4>
+                            <span class="theme-portfolio-subtitle">by ${value.Username}<br>${value.CreationTime}</span>
+                        </div>
+                    </div>`;
+            });
+
+            $('#portfolio-4-col-grid-search').html(htmlstr);
+            handlePortfolio4ColGridSearch();  
+        },
+        error: function(xhr) {
+            console.log("Search failed: ", xhr.responseText);
+            $("#searchquery-container").html("An error occurred while fetching search results.");
+        },
+        data: JSON.stringify(datadir)
+    });
+}
+
 function searchPhotos(){
-    var query = $("#query").val();
+    var query = sessionStorage.getItem('query');
 
-    var datadir = {
-        query: query
-    };
-
-    console.log(datadir);
-    var URL = `https://xbxg4vv5rg.execute-api.us-east-1.amazonaws.com/dev/search`
+    var datadir = { query: query };
 
     $.ajax({
         url: `${API_URL}/search`,
@@ -167,30 +220,14 @@ function searchPhotos(){
         contentType: "application/json",
         success: function(data) {                        
             console.log(data);
-            sessionStorage.setItem('query', query);
             sessionStorage.setItem('searchdata', JSON.stringify(data));
-            location.href='search.html';            
+            loadSearchPage();
         },
         error: function() {
-            console.log("Failed");
+            console.log("Search failed");
         },        
         data: JSON.stringify(datadir)
     }); 
-}
-
-function loadSearchPage(){
-    var query = sessionStorage.getItem('query');
-    var data = JSON.parse(sessionStorage.getItem('searchdata'));
-    console.log(data);
-    $("#searchquery-container").html("Showing search results for: "+query);
-    var htmlstr="";
-    $.each(data.body, function(index, value) {
-        //console.log(value);
-        htmlstr = htmlstr + '<div class=\"cbp-item idea web-design theme-portfolio-item-v2 theme-portfolio-item-xs\"> <div class=\"cbp-caption\"> <div class=\"cbp-caption-defaultWrap theme-portfolio-active-wrap\"> <img src=\"'+value.URL+'\" alt=\"\"> <div class=\"theme-icons-wrap theme-portfolio-lightbox\"> <a class=\"cbp-lightbox\" href=\"'+value.URL+'\" data-title=\"Portfolio\"> <i class=\"theme-icons theme-icons-white-bg theme-icons-sm radius-3 icon-focus\"></i> </a> </div> </div> </div> <div class=\"theme-portfolio-title-heading\"> <h4 class=\"theme-portfolio-title\"><a href=\"viewphoto.html?id='+value.PhotoID+'\">'+value.Title+'</a></h4> <span class=\"theme-portfolio-subtitle\">by '+value.Username+'<br>'+value.CreationTime+'</span> </div> </div>';
-                });
-        //console.log(htmlstr);
-        $('#portfolio-4-col-grid-search').html(htmlstr);
-        handlePortfolio4ColGridSearch();        
 }
 
 function processAddPhoto(filename, title, description, tags){
@@ -357,10 +394,10 @@ function loadViewPhotoPage(){
             htmlstr = htmlstr + '<img class=\"img-responsive\" src=\"'+photo.URL+'\" alt=\"\"> <div style="display: block;position: relative;float: right;margin: 1em;"><button id="photo_update" data-photo="' + photo.PhotoID + '">Update</button> <button id="photo_delete" data-photo="' + photo.PhotoID + '">Delete</button></div><div class=\"blog-grid-content\"> <h2 class=\"blog-grid-title-lg\"><a class=\"blog-grid-title-link\" href=\"#\">'+photo.Title+'</a></h2> <p>By: '+photo.Username+'</p> <p>Uploaded: '+photo.CreationTime+'</p> <p>'+photo.Description+'</p></div>';
             $('#viewphoto-container').html(htmlstr);
             // onViewImage();
-            tags=photo.Tags.split(',');
-            console.log(tags)
-            $.each(tags, function(index, value) {
-                tagstr=tagstr+'<li><a class=\"radius-50\" href=\"#\">'+value+'</a></li>';
+            var tags = photo.Tags.split(',');
+            var tagstr = '';
+            tags.forEach(tag => {
+                tagstr += `<li><a href="#" class="tag-link" data-tag="${tag.trim()}">${tag.trim()}</a></li>`;
             });
             $('#tags-container').html(tagstr);
         },
@@ -450,6 +487,15 @@ $('#viewphoto-container').on('click', '#photo_delete', function(e) {
     }
 });
 
+$(document).on('click', '.tag-link', function(e) {
+    e.preventDefault();
+    var tag = $(this).data('tag');
+    console.log("Tag captured: ", tag);
+    sessionStorage.setItem('query', tag);
+    window.location.href = 'search.html';
+});
+
+
 $(document).ready(function(){
     $("#loginform" ).submit(function(event) {
       processLogin();
@@ -466,37 +512,39 @@ $(document).ready(function(){
       uploadPhoto();
     });
 
-    $("#searchform" ).submit(function(event) {
-      searchPhotos();
-      event.preventDefault();
+    $("#searchform").submit(function(event) {
+        event.preventDefault();
+        var query = $("#query").val().trim();
+    
+        if (query) {
+            sessionStorage.setItem('query', query);
+            window.location.href = 'search.html';
+        }
     });
-
+    
     $("#confirmemail-form" ).submit(function(event) {
       loadConfirmEmailPage();
       event.preventDefault();
     });
 
-
     var pathname = window.location.pathname; 
     console.log(pathname);
 
-    if(pathname=='/index.html' || pathname==='/'){
+    if (pathname == '/index.html' || pathname == '/') {
         loadHomePage();
-    }else if(pathname=='/addphoto.html'){
+    } else if (pathname == '/addphoto.html') {
         loadAddPhotosPage();
-    }else if(pathname=="/viewphoto.html"){
+    } else if (pathname == "/viewphoto.html") {
         loadViewPhotoPage();
-    }else if(pathname=="/search.html"){
+    } else if (pathname == "/search.html") {
         loadSearchPage();
-    }else if(pathname=="/confirmemail.html"){
-        var username =  sessionStorage.getItem('username');
+    } else if (pathname == "/confirmemail.html") {
+        var username = sessionStorage.getItem('username');
         $("#username").val(username);        
     }
-
 
     $("#logoutlink" ).click(function(event) {
       clearSession();
       event.preventDefault();
     });
-
 });
