@@ -82,6 +82,7 @@ Resources:
             Principal: "apigateway.amazonaws.com"
             SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayRestApi}/*/POST/signup"
 
+    # Permission for delete photo lambda function
     LambdaPermission13:
         Type: "AWS::Lambda::Permission"
         Properties:
@@ -89,6 +90,16 @@ Resources:
             FunctionName: !GetAtt LambdaFunction8.Arn
             Principal: "apigateway.amazonaws.com"
             SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayRestApi}/*/DELETE/photos/*"   
+
+    # Permission for update photo lambda function
+    LambdaPermissionUpdatePhoto:
+        Type: "AWS::Lambda::Permission"
+        Properties:
+            Action: "lambda:InvokeFunction"
+            FunctionName: !GetAtt LambdaFunction9.Arn
+            Principal: "apigateway.amazonaws.com"
+            SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayRestApi}/*/PUT/photos/*"
+
 
     LambdaFunction:
         Type: "AWS::Lambda::Function"
@@ -563,8 +574,8 @@ Resources:
                                 "body": json.dumps({"message": "Photo not found"})
                             }
 
-                        photo = response['Items'][0]  # Get first matching item
-                        creationTime = photo['CreationTime']  # Extract CreationTime
+                        photo = response['Items'][0]
+                        creationTime = photo['CreationTime']
                         file_url = photo['URL']
                         filename = file_url.split('/')[-1]
 
@@ -596,6 +607,141 @@ Resources:
                             },
                             "body": json.dumps({"message": "Photo deleted successfully"})
                         }
+            MemorySize: 128
+            Role: !GetAtt IAMRole2.Arn
+            Runtime: "python3.10"
+            Timeout: 3
+            TracingConfig: 
+                Mode: "PassThrough"
+            EphemeralStorage: 
+                Size: 512
+
+    # Lambda function update photo
+    LambdaFunction9:
+        Type: "AWS::Lambda::Function"
+        Properties:
+            Description: ""
+            FunctionName: "photogallery_updatephoto"
+            Handler: "index.lambda_handler"
+            Architectures: 
+            - "x86_64"
+            Code:
+                ZipFile: !Sub |
+                    import json
+                    import boto3
+                    from boto3.dynamodb.conditions import Key
+
+                    REGION = "${AWS::Region}"
+                    dynamodb = boto3.resource('dynamodb', region_name=REGION)
+                    table = dynamodb.Table('${DynamoDBTable}')
+
+                    def lambda_handler(event, context):
+                        try:
+                            print("Incoming event:", json.dumps(event))
+
+                            body = json.loads(event.get('body', '{}'))
+
+                            if 'pathParameters' not in event or 'id' not in event['pathParameters']:
+                                return {
+                                    "statusCode": 400,
+                                    "headers": {
+                                        "Access-Control-Allow-Origin": "*",
+                                        "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS,PUT",
+                                        "Access-Control-Allow-Headers": "Content-Type,Authorization"
+                                    },
+                                    "body": json.dumps({"message": "Photo ID is required"})
+                                }
+
+                            photo_id = event['pathParameters']['id']
+                            title = body.get("title", "")
+                            description = body.get("description", "")
+                            tags = body.get("tags", "")
+
+                            if not photo_id:
+                                return {
+                                    "statusCode": 400,
+                                    "headers": {
+                                        "Access-Control-Allow-Origin": "*",
+                                        "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS,PUT",
+                                        "Access-Control-Allow-Headers": "Content-Type,Authorization"
+                                    },
+                                    "body": json.dumps({"message": "Photo ID is missing"})
+                                }
+
+                            query_response = table.query(
+                                KeyConditionExpression=Key('PhotoID').eq(photo_id)
+                            )
+
+                            if 'Items' not in query_response or not query_response['Items']:
+                                return {
+                                    "statusCode": 404,
+                                    "headers": {
+                                        "Access-Control-Allow-Origin": "*",
+                                        "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS,PUT",
+                                        "Access-Control-Allow-Headers": "Content-Type,Authorization"
+                                    },
+                                    "body": json.dumps({"message": "Photo not found"})
+                                }
+
+                            existing_item = query_response['Items'][0]
+                            creation_time = existing_item['CreationTime']
+
+                            if isinstance(tags, str):
+                                tags = tags.split(",")
+
+                            update_response = table.update_item(
+                                Key={'PhotoID': photo_id, 'CreationTime': creation_time},
+                                UpdateExpression="SET Title = :t, Description = :d, Tags = :g",
+                                ExpressionAttributeValues={
+                                    ':t': title if title else existing_item.get("Title", ""),
+                                    ':d': description if description else existing_item.get("Description", ""),
+                                    ':g': tags if tags else existing_item.get("Tags", [])
+                                },
+                                ReturnValues="UPDATED_NEW"
+                            )
+
+                            updated_attributes = update_response.get("Attributes", {})
+
+                            return {
+                                "statusCode": 200,
+                                "headers": {
+                                    "Access-Control-Allow-Origin": "*",
+                                    "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS,PUT",
+                                    "Access-Control-Allow-Headers": "Content-Type,Authorization"
+                                },
+                                "body": json.dumps({
+                                    "message": "Photo updated successfully",
+                                    "updatedAttributes": updated_attributes
+                                })
+                            }
+
+                        except json.JSONDecodeError as json_error:
+                            return {
+                                "statusCode": 400,
+                                "headers": {
+                                    "Access-Control-Allow-Origin": "*",
+                                    "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS,PUT",
+                                    "Access-Control-Allow-Headers": "Content-Type,Authorization"
+                                },
+                                "body": json.dumps({
+                                    "message": "Invalid JSON format",
+                                    "error": str(json_error)
+                                })
+                            }
+
+                        except Exception as e:
+                            return {
+                                "statusCode": 500,
+                                "headers": {
+                                    "Access-Control-Allow-Origin": "*",
+                                    "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS,PUT",
+                                    "Access-Control-Allow-Headers": "Content-Type,Authorization"
+                                },
+                                "body": json.dumps({
+                                    "message": "Error updating photo",
+                                    "error": str(e)
+                                })
+                            }
             MemorySize: 128
             Role: !GetAtt IAMRole2.Arn
             Runtime: "python3.10"
@@ -649,6 +795,7 @@ Resources:
             - "ApiGatewayMethod15"
             - "ApiGatewayMethod16"
             - "ApiGatewayMethod17"
+            - "ApiGatewayMethod18"
         Properties:
             RestApiId: !Ref ApiGatewayRestApi
 
@@ -1214,7 +1361,7 @@ Resources:
                   - 
                     ResponseParameters: 
                         "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-                        "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,GET,DELETE,OPTIONS'"
+                        "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,GET,DELETE,PUT'"
                         "method.response.header.Access-Control-Allow-Origin": "'*'"
                     StatusCode: "200"
                 PassthroughBehavior: "WHEN_NO_TEMPLATES"
@@ -1316,13 +1463,13 @@ Resources:
                     "method.response.header.Access-Control-Allow-Methods": true
                     "method.response.header.Access-Control-Allow-Origin": true
                 StatusCode: "200"
-            Integration: 
+            Integration:
                 CacheNamespace: !Ref ApiGatewayResource3
                 ContentHandling: "CONVERT_TO_TEXT"
                 IntegrationHttpMethod: "POST"
                 IntegrationResponses: 
                   - 
-                    ResponseParameters: 
+                    ResponseParameters:
                         "method.response.header.Access-Control-Allow-Origin": "'*'"
                     StatusCode: "200"
                 PassthroughBehavior: "WHEN_NO_TEMPLATES"
@@ -1577,6 +1724,60 @@ Resources:
                 TimeoutInMillis: 29000
                 Type: "AWS"
                 Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunction8.Arn}/invocations"
+    
+    # Update Api Gateway
+    ApiGatewayMethod18:
+        Type: "AWS::ApiGateway::Method"
+        Properties:
+            RestApiId: !Ref ApiGatewayRestApi
+            ResourceId: !Ref ApiGatewayResource3
+            HttpMethod: "PUT"
+            AuthorizationType: "NONE"
+            ApiKeyRequired: false
+            MethodResponses:
+            - 
+                ResponseModels: 
+                    "application/json": "Empty"
+                ResponseParameters: 
+                    "method.response.header.Access-Control-Allow-Origin": true
+                    "method.response.header.Access-Control-Allow-Methods": true
+                    "method.response.header.Access-Control-Allow-Headers": true
+                StatusCode: "200"
+            Integration:
+                IntegrationHttpMethod: "POST"
+                IntegrationResponses:
+                - 
+                    ResponseParameters:
+                        "method.response.header.Access-Control-Allow-Origin": "'*'"
+                        "method.response.header.Access-Control-Allow-Methods": "'GET,PUT,OPTIONS'"
+                        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,Authorization'"
+                    ResponseTemplates: {}
+                    StatusCode: "200"
+                PassthroughBehavior: "WHEN_NO_TEMPLATES"
+                RequestTemplates:
+                    "application/json": !Sub |
+                        {
+                            "body-json" : $input.json('$'),
+                            "params" : {
+                            #foreach($type in $input.params())
+                                "$type" : {
+                                #foreach($paramName in $input.params($type).keySet())
+                                "$paramName" : "$util.escapeJavaScript($input.params($type).get($paramName))"
+                                    #if($foreach.hasNext),#end
+                                #end
+                                }
+                                #if($foreach.hasNext),#end
+                            #end
+                            },
+                            "context" : {
+                                "http-method" : "$context.httpMethod",
+                                "source-ip" : "$context.identity.sourceIp"
+                            }
+                        }
+                TimeoutInMillis: 29000
+                Type: "AWS"
+                Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunction9.Arn}/invocations"
+
 
     DynamoDBTable:
         Type: "AWS::DynamoDB::Table"

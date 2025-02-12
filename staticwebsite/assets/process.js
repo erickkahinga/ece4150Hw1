@@ -378,10 +378,10 @@ function loadAddPhotosPage(){
 function loadViewPhotoPage(){
     checkIfLoggedIn();
     $("#userdata-container").html("Logged in as "+sessionStorage.getItem('name')+" ("+sessionStorage.getItem('username')+")");
-    PhotoID=$.urlParam('id');
-    console.log(PhotoID);
-    var htmlstr="";
-    var tagstr="";
+
+    var PhotoID = $.urlParam('id');
+    console.log("Viewing Photo ID: ", PhotoID);
+
     $.ajax({
         url: `${API_URL}/photos/${PhotoID}`,
         type: 'GET',
@@ -389,22 +389,38 @@ function loadViewPhotoPage(){
         dataType: 'json',
         contentType: "application/json",
         success: function(data) {            
-            console.log(data);
-            photo=data.body[0];
-            htmlstr = htmlstr + '<img class=\"img-responsive\" src=\"'+photo.URL+'\" alt=\"\"> <div style="display: block;position: relative;float: right;margin: 1em;"><button id="photo_update" data-photo="' + photo.PhotoID + '">Update</button> <button id="photo_delete" data-photo="' + photo.PhotoID + '">Delete</button></div><div class=\"blog-grid-content\"> <h2 class=\"blog-grid-title-lg\"><a class=\"blog-grid-title-link\" href=\"#\">'+photo.Title+'</a></h2> <p>By: '+photo.Username+'</p> <p>Uploaded: '+photo.CreationTime+'</p> <p>'+photo.Description+'</p></div>';
-            $('#viewphoto-container').html(htmlstr);
-            // onViewImage();
+            console.log("Photo Data: ", data);
+            var photo = data.body[0];
+
+            $('#viewphoto-container').html(`
+                <img class="img-responsive" src="${photo.URL}" alt="">
+                <div style="display: block; float: right; margin: 1em;">
+                    <button id="photo_update" data-photo="${photo.PhotoID}">Update</button>
+                    <button id="photo_delete" data-photo="${photo.PhotoID}">Delete</button>
+                </div>
+                <div class="blog-grid-content">
+                    <h2 class="blog-grid-title-lg"><a class="blog-grid-title-link">${photo.Title}</a></h2>
+                    <p>By: ${photo.Username}</p>
+                    <p>Uploaded: ${photo.CreationTime}</p>
+                    <p>${photo.Description}</p>
+                </div>
+            `);
+
             var tags = photo.Tags.split(',');
             var tagstr = '';
             tags.forEach(tag => {
                 tagstr += `<li><a href="#" class="tag-link" data-tag="${tag.trim()}">${tag.trim()}</a></li>`;
             });
             $('#tags-container').html(tagstr);
+
+            $("#update-title").val(photo.Title);
+            $("#update-description").val(photo.Description);
+            $("#update-tags").val(photo.Tags);
         },
         error: function() {
-            console.log("Failed");
+            console.log("Failed to load photo details.");
         }
-    });   
+    });
 }
 
 // Deleting function
@@ -472,6 +488,7 @@ $('#portfolio-4-col-grid').on('click', '#home_delete', function(e) {
 
 $('#viewphoto-container').on('click', '#photo_update', function() {
     console.log("UPDATE!!!!", $(this).data('photo'));
+    $("#update-form-container").fadeIn();
 });
 
 $('#viewphoto-container').on('click', '#photo_delete', function(e) {
@@ -493,6 +510,44 @@ $(document).on('click', '.tag-link', function(e) {
     console.log("Tag captured: ", tag);
     sessionStorage.setItem('query', tag);
     window.location.href = 'search.html';
+});
+
+$('#cancel-update').click(function() {
+    console.log("Cancel clicked");
+    $("#update-form-container").fadeOut();
+});
+
+$('#update-photo-form').submit(function(e) {
+    e.preventDefault();
+
+    var PhotoID = $.urlParam('id');
+    var updatedTitle = $("#update-title").val();
+    var updatedDescription = $("#update-description").val();
+    var updatedTags = $("#update-tags").val();
+
+    var datadir = {
+        title: updatedTitle,
+        description: updatedDescription,
+        tags: updatedTags
+    };
+
+    $.ajax({
+        url: `${API_URL}/photos/${PhotoID}`,
+        type: 'PUT',
+        crossDomain: true,
+        dataType: 'json',
+        contentType: "application/json",
+        success: function(data) {
+            console.log("Update successful: ", data);
+            alert("Photo updated successfully!");
+            location.reload();
+        },
+        error: function(xhr) {
+            console.log("Update failed: ", xhr.responseText);
+            alert("Update failed. Please try again.");
+        },
+        data: JSON.stringify(datadir)
+    });
 });
 
 
